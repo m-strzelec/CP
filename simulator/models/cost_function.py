@@ -1,0 +1,25 @@
+"""Implements the priority cost function for scheduling."""
+
+import math
+
+
+def compute_cost(size: float, wait_time: float, m: float, k: float) -> float:
+    """Calculate cost function. Lower cost => higher scheduling priority.
+
+    Parameters
+    ----------
+    size : float
+        Size of the file.
+    wait_time : float
+        Time in seconds that file waited since its arrival.
+    m : float
+        TODO: Param 1
+    k : float
+        TODO: Param 2
+
+    Returns
+    -------
+    float
+        Cost function for scheduling.
+    """
+    return (1.0 / m) * math.log(size + 1) + k / math.sqrt(wait_time)
