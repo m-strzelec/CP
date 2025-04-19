@@ -1,25 +1,32 @@
-import math
+"""Defines a file model with metadata for simulation."""
+
 import time
-from dataclasses import dataclass, field
 
 
-@dataclass
 class FileModel:
-    client_id: int
-    size: float
-    created_at: float = field(default_factory=time.monotonic)
+    """Class representing a file to be sent by a client."""
+    _counter = 0
 
-    def compute_priority(self, m: float, k: float, now: float = None) -> float:
-        """Calculate file cost: 1 / m * log(s + 1) + k / sqrt(t)"""
-        now = now or time.monotonic()
-        t = now - self.created_at
-        s = self.size
-        return (1 / m) * math.log(s + 1) + k / math.sqrt(t)
+    def __init__(self, size: float):
+        FileModel._counter += 1
+        self.id = FileModel._counter
+        self.size = size
+        self.arrival_time = time.monotonic()
+        self.start_time = None
+        self.end_time = None
 
-    def __repr__(self):
-        age = time.monotonic() - self.created_at
-        return (
-            f"<File cid={self.client_id}, "
-            f"size={self.size}, "
-            f"age={age:.2f}s>"
-        )
+    def mark_start(self):
+        """Mark the time when file begins processing."""
+        self.start_time = time.monotonic()
+
+    def mark_end(self):
+        """Mark the time when file has finished processing."""
+        self.end_time = time.monotonic()
+
+    @property
+    def waiting_time(self) -> float:
+        """Compute how long file has waited in the queue."""
+        now = time.monotonic()
+        if self.start_time is None:
+            return now - self.arrival_time
+        return self.start_time - self.arrival_time
