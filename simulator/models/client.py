@@ -2,30 +2,28 @@
 
 import threading
 import random
-import time
 from simulator.models.file_model import FileModel
 
 
 class Client(threading.Thread):
-    """Class simulating client actions"""
+    """Class simulating client actions."""
     def __init__(
-        self, client_id: int, out_queue, interval: float,
+        self, client_id: int, queue_monitor, interval: float,
         size_range: tuple[float, float]
     ):
         super().__init__(daemon=True)
         self.client_id = client_id
-        self.out_queue = out_queue
+        self.queue_monitor = queue_monitor
         self.interval = interval
         self.size_range = size_range
-        self._running = False
+        self._stop_event = threading.Event()
 
     def run(self):
-        self._running = True
-        while self._running:
+        while not self._stop_event.is_set():
             size = random.uniform(*self.size_range)
             file = FileModel(size=size)
-            self.out_queue.put(file)
-            time.sleep(self.interval)
+            self.queue_monitor.put_file(file)
+            self._stop_event.wait(timeout=self.interval)
 
     def stop(self):
-        self._running = False
+        self._stop_event.set()

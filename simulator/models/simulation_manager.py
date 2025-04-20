@@ -1,8 +1,9 @@
 """Coordinates simulation loop."""
 
-from queue import Queue
+import time
 from simulator.models.client import Client
 from simulator.models.catalog_model import CatalogModel
+from simulator.models.queue_monitor import QueueMonitor
 
 
 class SimulationManager:
@@ -12,14 +13,14 @@ class SimulationManager:
         size_range: tuple[float, float], m: float, k: float,
         dispatch_callback=None
     ):
-        self.queue = Queue()
-        self.clients = [
-            Client(i, self.queue, client_interval, size_range)
-            for i in range(num_clients)
-        ]
+        self.queue_monitor = QueueMonitor(m=m, k=k)
         self.catalogs = [
-            CatalogModel(i, self.queue, m, k, dispatch_callback)
+            CatalogModel(i, self.queue_monitor, dispatch_callback)
             for i in range(num_catalogs)
+        ]
+        self.clients = [
+            Client(i, self.queue_monitor, client_interval, size_range)
+            for i in range(num_clients)
         ]
 
     def start(self):
@@ -31,5 +32,10 @@ class SimulationManager:
     def stop(self):
         for cl in self.clients:
             cl.stop()
+        time.sleep(0.5)
         for c in self.catalogs:
             c.stop()
+        # Wait for threads to finish
+        for thread in self.clients + self.catalogs:
+            if thread.is_alive():
+                thread.join(timeout=1.0)

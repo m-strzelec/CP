@@ -1,15 +1,18 @@
 """Defines a file model with metadata for simulation."""
 
+import threading
 import time
 
 
 class FileModel:
     """Class representing a file to be sent by a client."""
     _counter = 0
+    _counter_lock = threading.Lock()
 
     def __init__(self, size: float):
-        FileModel._counter += 1
-        self.id = FileModel._counter
+        with FileModel._counter_lock:
+            FileModel._counter += 1
+            self.id = FileModel._counter
         self.size = size
         self.arrival_time = time.monotonic()
         self.start_time = None
