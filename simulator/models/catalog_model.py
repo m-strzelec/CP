@@ -2,21 +2,36 @@
 
 import threading
 import time
+from typing import Optional
+from collections.abc import Callable
+
+from simulator.models.file_model import FileModel
+from simulator.models.queue_monitor import QueueMonitor
+
+
+DispatchCallbackType = Callable[[int, Optional[FileModel]], None]
 
 
 class CatalogModel(threading.Thread):
     """Class representing processing slot that pulls the-lowest-cost file."""
-    def __init__(self, catalog_id: int, queue_monitor, dispatch_callback=None):
+    def __init__(
+        self,
+        catalog_id: int,
+        queue_monitor: QueueMonitor,
+        dispatch_callback: Optional[DispatchCallbackType] = None
+    ) -> None:
         super().__init__(daemon=True)
-        self.catalog_id = catalog_id
-        self.queue_monitor = queue_monitor
-        self.current_file = None
-        self.dispatch_callback = dispatch_callback
-        self._stop_event = threading.Event()
+        self.catalog_id: int = catalog_id
+        self.queue_monitor: QueueMonitor = queue_monitor
+        self.current_file: Optional[FileModel] = None
+        self.dispatch_callback: Optional[DispatchCallbackType] = (
+            dispatch_callback
+        )
+        self._stop_event: threading.Event = threading.Event()
 
-    def run(self):
+    def run(self) -> None:
         while not self._stop_event.is_set():
-            file = self.queue_monitor.get_next_file()
+            file: Optional[FileModel] = self.queue_monitor.get_next_file()
             if file:
                 self.current_file = file
                 file.mark_start()
@@ -32,9 +47,9 @@ class CatalogModel(threading.Thread):
                 # Wait before checking again if any file is available
                 time.sleep(0.1)
 
-    def process_file(self, file_item):
+    def process_file(self, file: FileModel) -> None:
         """Simulate file processing delay."""
-        time.sleep(file_item.size * 0.01)
+        time.sleep(file.size * 0.01)
 
-    def stop(self):
+    def stop(self) -> None:
         self._stop_event.set()

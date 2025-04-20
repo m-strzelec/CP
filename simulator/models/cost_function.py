@@ -22,4 +22,7 @@ def compute_cost(size: float, wait_time: float, m: float, k: float) -> float:
     float
         Cost function for scheduling.
     """
-    return (1.0 / m) * math.log(size + 1) + k / math.sqrt(wait_time)
+    safe_wait_time: float = max(wait_time, 0.001)
+    size_cost: float = (1.0 / m) * math.log(size + 1)
+    wait_cost: float = k / math.sqrt(safe_wait_time)
+    return size_cost + wait_cost
