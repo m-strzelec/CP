@@ -31,8 +31,8 @@ class CatalogModel(threading.Thread):
 
     def run(self) -> None:
         while not self._stop_event.is_set():
-            file: Optional[FileModel] = self.queue_monitor.get_next_file()
-            if file:
+            file: Optional[FileModel] = self.queue_monitor.get_next_file(0.5)
+            if file and not self._stop_event.is_set():
                 self.current_file = file
                 file.mark_start()
                 if self.dispatch_callback:
@@ -43,13 +43,16 @@ class CatalogModel(threading.Thread):
                 self.current_file = None
                 if self.dispatch_callback:
                     self.dispatch_callback(self.catalog_id, None)
-            else:
-                # Wait before checking again if any file is available
-                time.sleep(0.1)
 
     def process_file(self, file: FileModel) -> None:
         """Simulate file processing delay."""
-        time.sleep(file.size * 0.01)
+        processing_time: float = file.size * 0.01
+        end_time: float = time.monotonic() + processing_time
+        while time.monotonic() < end_time and not self._stop_event.is_set():
+            remaining: float = end_time - time.monotonic()
+            if remaining <= 0:
+                break
+            time.sleep(min(0.1, remaining))
 
     def stop(self) -> None:
         self._stop_event.set()
