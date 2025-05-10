@@ -1,7 +1,7 @@
 """Synchronizes access to the file queue."""
 
 import threading
-from typing import Optional, Deque
+from typing import Optional, Deque, Callable
 from collections import deque
 
 from simulator.models.cost_function import compute_cost
@@ -10,18 +10,27 @@ from simulator.models.file_model import FileModel
 
 class QueueMonitor:
     """Class that handles thread-safe access to the file queue."""
-    def __init__(self, m: float, k: float) -> None:
+    def __init__(
+        self,
+        m: float,
+        k: float,
+        file_creation_callback: Optional[Callable[[FileModel], None]] = None
+    ) -> None:
         self.queue: Deque[FileModel] = deque()
         self.lock: threading.Lock = threading.Lock()
         self.condition: threading.Condition = threading.Condition(self.lock)
         self.m: float = m
         self.k: float = k
+        self.file_creation_callback = file_creation_callback
 
     def put_file(self, file: FileModel) -> None:
         """Add a file to the queue and notify waiting threads."""
         with self.condition:
             self.queue.append(file)
             self.condition.notify()
+
+        if self.file_creation_callback:
+            self.file_creation_callback(file)
 
     def get_next_file(self, timeout: Optional[float] = None) -> Optional[FileModel]:
         """Get the next file based on cost function.
@@ -66,7 +75,7 @@ class QueueMonitor:
 
             return chosen
 
-    def has_files(self) -> bool:
-        """Check if there are any files in the queue."""
+    def get_waiting_files(self) -> list[FileModel]:
+        """Get a list of all files currently in the queue."""
         with self.lock:
-            return len(self.queue) > 0
+            return list(self.queue)

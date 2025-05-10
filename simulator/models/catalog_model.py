@@ -2,14 +2,14 @@
 
 import threading
 import time
-from typing import Optional
-from collections.abc import Callable
+from typing import Optional, Callable
+from collections.abc import Callable as ABCCallable
 
 from simulator.models.file_model import FileModel
 from simulator.models.queue_monitor import QueueMonitor
 
 
-DispatchCallbackType = Callable[[int, Optional[FileModel]], None]
+DispatchCallbackType = ABCCallable[[int, Optional[FileModel]], None]
 
 
 class CatalogModel(threading.Thread):
@@ -18,7 +18,8 @@ class CatalogModel(threading.Thread):
         self,
         catalog_id: int,
         queue_monitor: QueueMonitor,
-        dispatch_callback: Optional[DispatchCallbackType] = None
+        dispatch_callback: Optional[DispatchCallbackType] = None,
+        file_processed_callback: Optional[Callable[[FileModel], None]] = None
     ) -> None:
         super().__init__(daemon=True)
         self.catalog_id: int = catalog_id
@@ -27,6 +28,7 @@ class CatalogModel(threading.Thread):
         self.dispatch_callback: Optional[DispatchCallbackType] = (
             dispatch_callback
         )
+        self.file_processed_callback = file_processed_callback
         self._stop_event: threading.Event = threading.Event()
 
     def run(self) -> None:
@@ -40,6 +42,10 @@ class CatalogModel(threading.Thread):
 
                 self.process_file(file)
                 file.mark_end()
+
+                if self.file_processed_callback:
+                    self.file_processed_callback(file)
+
                 self.current_file = None
                 if self.dispatch_callback:
                     self.dispatch_callback(self.catalog_id, None)

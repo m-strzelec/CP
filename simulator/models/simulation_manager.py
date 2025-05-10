@@ -1,11 +1,12 @@
 """Coordinates simulation loop."""
 
 import time
-from typing import Optional
+from typing import Optional, Callable
 
 from simulator.models.client import Client
 from simulator.models.catalog_model import CatalogModel, DispatchCallbackType
 from simulator.models.queue_monitor import QueueMonitor
+from simulator.models.file_model import FileModel
 
 
 class SimulationManager:
@@ -18,11 +19,22 @@ class SimulationManager:
         size_range: tuple[float, float],
         m: float,
         k: float,
-        dispatch_callback: Optional[DispatchCallbackType] = None
+        dispatch_callback: Optional[DispatchCallbackType] = None,
+        file_creation_callback: Optional[Callable[[FileModel], None]] = None,
+        file_processed_callback: Optional[Callable[[FileModel], None]] = None
     ) -> None:
-        self.queue_monitor: QueueMonitor = QueueMonitor(m=m, k=k)
+        self.queue_monitor: QueueMonitor = QueueMonitor(
+            m=m,
+            k=k,
+            file_creation_callback=file_creation_callback
+        )
         self.catalogs: list[CatalogModel] = [
-            CatalogModel(i, self.queue_monitor, dispatch_callback)
+            CatalogModel(
+                i,
+                self.queue_monitor,
+                dispatch_callback,
+                file_processed_callback
+            )
             for i in range(num_catalogs)
         ]
         self.clients: list[Client] = [
