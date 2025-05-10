@@ -12,6 +12,8 @@ class SimulationViewModel(QObject):
     catalogStatusChanged = Signal(int, str)
     progressUpdated = Signal(int, float)
     simulationStateChanged = Signal(bool)
+    waitingFilesUpdated = Signal(list)
+    processedFilesUpdated = Signal(list)
 
     def __init__(self):
         super().__init__()
@@ -21,7 +23,7 @@ class SimulationViewModel(QObject):
         self._num_catalogs: int = 5
         self._client_interval: float = 1.0
         self._min_file_size: float = 1.0
-        self._max_file_size: float = 1000.0
+        self._max_file_size: float = 100.0
         self._m_parameter: float = 1.0
         self._k_parameter: float = 1.0
 
@@ -29,6 +31,9 @@ class SimulationViewModel(QObject):
         self._is_running: bool = False
         self._catalog_statuses: dict[int, str] = {}
         self._catalog_progresses: dict[int, float] = {}
+
+        self._waiting_files: list[FileModel] = []
+        self._processed_files: list[FileModel] = []
 
     def num_clients(self) -> int:
         return self._num_clients
@@ -82,12 +87,23 @@ class SimulationViewModel(QObject):
     def is_running(self) -> bool:
         return self._is_running
 
+    def waiting_files(self) -> list[FileModel]:
+        return self._waiting_files
+
+    def processed_files(self) -> list[FileModel]:
+        return self._processed_files
+
     @Slot()
     def start_simulation(self) -> None:
         if self._is_running:
             return
         self._catalog_statuses = {i: "Idle" for i in range(self._num_catalogs)}
         self._catalog_progresses = {i: 0.0 for i in range(self._num_catalogs)}
+        self._waiting_files = []
+        self._processed_files = []
+        self.waitingFilesUpdated.emit([])
+        self.processedFilesUpdated.emit([])
+
         self._simulation_manager = SimulationManager(
             num_clients=self._num_clients,
             num_catalogs=self._num_catalogs,
@@ -95,7 +111,9 @@ class SimulationViewModel(QObject):
             size_range=(self._min_file_size, self._max_file_size),
             m=self._m_parameter,
             k=self._k_parameter,
-            dispatch_callback=self._catalog_callback
+            dispatch_callback=self._catalog_callback,
+            file_creation_callback=self._file_created_callback,
+            file_processed_callback=self._file_processed_callback
         )
         self._simulation_manager.start()
         self._is_running = True
@@ -137,3 +155,15 @@ class SimulationViewModel(QObject):
             self._catalog_progresses[catalog_id] = progress
             self.catalogStatusChanged.emit(catalog_id, status)
             self.progressUpdated.emit(catalog_id, progress)
+
+    def _file_created_callback(self, file: FileModel) -> None:
+        self._waiting_files.append(file)
+        self.waitingFilesUpdated.emit(self._waiting_files)
+
+    def _file_processed_callback(self, file: FileModel) -> None:
+        self._waiting_files = [
+            f for f in self._waiting_files if f.id != file.id
+        ]
+        self._processed_files.append(file)
+        self.waitingFilesUpdated.emit(self._waiting_files)
+        self.processedFilesUpdated.emit(self._processed_files)

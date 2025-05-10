@@ -3,20 +3,24 @@
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox,
     QDoubleSpinBox, QPushButton, QGroupBox, QProgressBar, QFormLayout,
+    QSplitter, QScrollArea
 )
 from PySide6.QtCore import Qt, Slot
+
 from simulator.viewmodels.simulation_vm import SimulationViewModel
+from simulator.views.file_list_widget import FileListWidget
 
 
 class SimulationView(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("File Processing Simulation")
-        self.resize(800, 600)
+        self.resize(1000, 700)
         self.view_model = SimulationViewModel()
 
         self.catalogs_group = None
         self.catalogs_layout = None
+        self.file_list_widget = None
 
         self.view_model.catalogStatusChanged.connect(
             self.update_catalog_status
@@ -24,12 +28,23 @@ class SimulationView(QMainWindow):
         self.view_model.progressUpdated.connect(self.update_progress)
         self.view_model.simulationStateChanged.connect(self.update_ui_state)
 
+        self.view_model.waitingFilesUpdated.connect(self.update_waiting_files)
+        self.view_model.processedFilesUpdated.connect(self.update_processed_files)
+
         self._setup_ui()
 
     def _setup_ui(self):
         main_widget = QWidget()
         main_layout = QVBoxLayout(main_widget)
 
+        # Control panel at the top
+        control_panel = QWidget()
+        control_panel_layout = QVBoxLayout(control_panel)
+        control_panel_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Settings and control area
+        settings_and_control = QWidget()
+        settings_and_control_layout = QHBoxLayout(settings_and_control)
         settings_group = QGroupBox("Simulation Settings")
         settings_layout = QFormLayout(settings_group)
 
@@ -92,7 +107,7 @@ class SimulationView(QMainWindow):
         settings_layout.addRow("Parameter k:", self.k_param_spin)
 
         # Control buttons
-        self.control_layout = QHBoxLayout()
+        self.control_layout = QVBoxLayout()
         self.start_button = QPushButton("Start Simulation")
         self.start_button.clicked.connect(self.view_model.start_simulation)
         self.stop_button = QPushButton("Stop Simulation")
@@ -101,16 +116,47 @@ class SimulationView(QMainWindow):
 
         self.control_layout.addWidget(self.start_button)
         self.control_layout.addWidget(self.stop_button)
+        self.control_layout.addStretch()
+
+        settings_and_control_layout.addWidget(settings_group)
+        settings_and_control_layout.addLayout(self.control_layout)
+
+        control_panel_layout.addWidget(settings_and_control)
+
+        # Main content area with horizontal splitter
+        content_splitter = QSplitter(Qt.Orientation.Horizontal)
+
+        # Left side - Catalog Status
+        catalogs_scroll_area = QScrollArea()
+        catalogs_scroll_area.setWidgetResizable(True)
+        catalogs_container = QWidget()
+        catalogs_container_layout = QVBoxLayout(catalogs_container)
 
         self.catalogs_group = QGroupBox("Catalog Status")
         self.catalogs_layout = QVBoxLayout(self.catalogs_group)
+        self.catalogs_layout.setSpacing(10)
 
         self.catalog_widgets: dict[int, dict[str, QWidget]] = {}
         self._recreate_catalog_widgets()
 
-        main_layout.addWidget(settings_group)
-        main_layout.addLayout(self.control_layout)
-        main_layout.addWidget(self.catalogs_group)
+        catalogs_container_layout.addWidget(self.catalogs_group)
+        catalogs_container_layout.addStretch()
+        catalogs_scroll_area.setWidget(catalogs_container)
+
+        # Right side - File Lists
+        self.file_list_widget = FileListWidget()
+
+        # Add widgets to content splitter
+        content_splitter.addWidget(catalogs_scroll_area)
+        content_splitter.addWidget(self.file_list_widget)
+
+        # Set initial sizes for splitter (50/50 split)
+        content_splitter.setSizes([500, 500])
+
+        # Add all to main layout
+        main_layout.addWidget(control_panel)
+        main_layout.addWidget(content_splitter)
+
         self.setCentralWidget(main_widget)
 
     def _recreate_catalog_widgets(self) -> None:
@@ -160,6 +206,18 @@ class SimulationView(QMainWindow):
             progress_bar = self.catalog_widgets[catalog_id]["progress"]
             if isinstance(progress_bar, QProgressBar):
                 progress_bar.setValue(int(progress))
+
+    @Slot(list)
+    def update_waiting_files(self, files: list) -> None:
+        """Update the waiting files view."""
+        if self.file_list_widget:
+            self.file_list_widget.update_waiting_files(files)
+
+    @Slot(list)
+    def update_processed_files(self, files: list) -> None:
+        """Update the processed files view."""
+        if self.file_list_widget:
+            self.file_list_widget.update_processed_files(files)
 
     @Slot(bool)
     def update_ui_state(self, is_running: bool) -> None:
