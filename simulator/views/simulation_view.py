@@ -64,7 +64,7 @@ class SimulationView(QMainWindow):
         )
 
         self.client_interval_spin = QDoubleSpinBox()
-        self.client_interval_spin.setRange(0.1, 10.0)
+        self.client_interval_spin.setRange(0.1, 100.0)
         self.client_interval_spin.setSingleStep(0.1)
         self.client_interval_spin.setValue(self.view_model.client_interval())
         self.client_interval_spin.valueChanged.connect(
@@ -72,28 +72,16 @@ class SimulationView(QMainWindow):
         )
 
         self.min_size_spin = QDoubleSpinBox()
-        self.min_size_spin.setRange(0.1, 100.0)
+        self.min_size_spin.setRange(0.1, 10000.0)
         self.min_size_spin.setSingleStep(0.1)
         self.min_size_spin.setValue(self.view_model.min_file_size())
         self.min_size_spin.valueChanged.connect(self._on_min_size_changed)
 
         self.max_size_spin = QDoubleSpinBox()
-        self.max_size_spin.setRange(0.1, 100.0)
+        self.max_size_spin.setRange(0.1, 10000.0)
         self.max_size_spin.setSingleStep(0.1)
         self.max_size_spin.setValue(self.view_model.max_file_size())
         self.max_size_spin.valueChanged.connect(self._on_max_size_changed)
-
-        self.m_param_spin = QDoubleSpinBox()
-        self.m_param_spin.setRange(0.1, 50.0)
-        self.m_param_spin.setSingleStep(0.1)
-        self.m_param_spin.setValue(self.view_model.m_parameter())
-        self.m_param_spin.valueChanged.connect(self._on_m_param_changed)
-
-        self.k_param_spin = QDoubleSpinBox()
-        self.k_param_spin.setRange(0.0, 50.0)
-        self.k_param_spin.setSingleStep(0.1)
-        self.k_param_spin.setValue(self.view_model.k_parameter())
-        self.k_param_spin.valueChanged.connect(self._on_k_param_changed)
 
         # Add settings
         settings_layout.addRow("Number of Clients:", self.num_clients_spin)
@@ -103,8 +91,6 @@ class SimulationView(QMainWindow):
         )
         settings_layout.addRow("Min File Size:", self.min_size_spin)
         settings_layout.addRow("Max File Size:", self.max_size_spin)
-        settings_layout.addRow("Parameter m:", self.m_param_spin)
-        settings_layout.addRow("Parameter k:", self.k_param_spin)
 
         # Control buttons
         self.control_layout = QVBoxLayout()
@@ -153,9 +139,12 @@ class SimulationView(QMainWindow):
         # Set initial sizes for splitter (50/50 split)
         content_splitter.setSizes([500, 500])
 
-        # Add all to main layout
-        main_layout.addWidget(control_panel)
-        main_layout.addWidget(content_splitter)
+        vertical_splitter = QSplitter(Qt.Orientation.Vertical)
+        vertical_splitter.addWidget(control_panel)
+        vertical_splitter.addWidget(content_splitter)
+        vertical_splitter.setSizes([100, 800])
+
+        main_layout.addWidget(vertical_splitter)
 
         self.setCentralWidget(main_widget)
 
@@ -181,15 +170,28 @@ class SimulationView(QMainWindow):
             progress_bar.setRange(0, 100)
             progress_bar.setValue(0)
             progress_bar.setTextVisible(True)
+            progress_bar.setFormat("%p%")
+
+            files_label = QLabel("Files: 0")
+            files_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            files_label.setWordWrap(True)
 
             catalog_layout.addWidget(status_label)
             catalog_layout.addWidget(progress_bar)
-            self.catalogs_layout.addWidget(catalog_box)
+            catalog_layout.addWidget(files_label)
+            self.catalogs_layout.insertWidget(i, catalog_box)
             self.catalog_widgets[i] = {
                 "group": catalog_box,
                 "status": status_label,
-                "progress": progress_bar
+                "progress": progress_bar,
+                "files_label": files_label,
+                "file_count": 0
             }
+
+        if self.file_list_widget:
+            self.file_list_widget.set_catalog_count(
+                self.view_model.num_catalogs()
+            )
 
     @Slot(int, str)
     def update_catalog_status(self, catalog_id: int, status: str) -> None:
@@ -206,6 +208,7 @@ class SimulationView(QMainWindow):
             progress_bar = self.catalog_widgets[catalog_id]["progress"]
             if isinstance(progress_bar, QProgressBar):
                 progress_bar.setValue(int(progress))
+                progress_bar.setFormat("%.1f%%" % progress)
 
     @Slot(list)
     def update_waiting_files(self, files: list) -> None:
@@ -219,6 +222,27 @@ class SimulationView(QMainWindow):
         if self.file_list_widget:
             self.file_list_widget.update_processed_files(files)
 
+        catalog_counts = {}
+        for file in files:
+            if hasattr(file, 'catalog_id') and file.catalog_id is not None:
+                catalog_id = file.catalog_id
+                if catalog_id not in catalog_counts:
+                    catalog_counts[catalog_id] = 0
+                catalog_counts[catalog_id] += 1
+
+        for catalog_id, count in catalog_counts.items():
+            if catalog_id in self.catalog_widgets:
+                catalog_data = self.catalog_widgets[catalog_id]
+                catalog_data["file_count"] = count
+                catalog_data["files_label"].setText(f"Files: {count}")
+
+    def reset_catalog_file_counts(self) -> None:
+        """Reset all catalog file counts to zero."""
+        for catalog_id in self.catalog_widgets:
+            catalog_data = self.catalog_widgets[catalog_id]
+            catalog_data["file_count"] = 0
+            catalog_data["files_label"].setText("Files: 0")
+
     @Slot(bool)
     def update_ui_state(self, is_running: bool) -> None:
         """Update UI controls based on simulation state."""
@@ -229,8 +253,8 @@ class SimulationView(QMainWindow):
         self.client_interval_spin.setEnabled(not is_running)
         self.min_size_spin.setEnabled(not is_running)
         self.max_size_spin.setEnabled(not is_running)
-        self.m_param_spin.setEnabled(not is_running)
-        self.k_param_spin.setEnabled(not is_running)
+        if is_running:
+            self.reset_catalog_file_counts()
 
     @Slot(int)
     def _on_num_clients_changed(self, value: int) -> None:
@@ -256,11 +280,3 @@ class SimulationView(QMainWindow):
         self.view_model.set_max_file_size(value)
         if value < self.min_size_spin.value():
             self.min_size_spin.setValue(value)
-
-    @Slot(float)
-    def _on_m_param_changed(self, value: float) -> None:
-        self.view_model.set_m_parameter(value)
-
-    @Slot(float)
-    def _on_k_param_changed(self, value: float) -> None:
-        self.view_model.set_k_parameter(value)

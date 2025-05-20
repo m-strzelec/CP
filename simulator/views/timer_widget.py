@@ -1,6 +1,6 @@
 """Timer for updating waiting time displays."""
 
-from typing import List, Optional
+from typing import Optional
 
 from PySide6.QtCore import QObject, QTimer, Signal, Slot
 from simulator.models.file_model import FileModel
@@ -13,9 +13,9 @@ class TimerWidget(QObject):
     def __init__(self, parent: Optional[QObject] = None):
         super().__init__(parent)
         self._timer = QTimer()
-        self._timer.setInterval(500)
+        self._timer.setInterval(800)
         self._timer.timeout.connect(self._update_times)
-        self._waiting_files: List[FileModel] = []
+        self._waiting_files: list[FileModel] = []
 
     def start(self) -> None:
         self._timer.start()
@@ -24,7 +24,7 @@ class TimerWidget(QObject):
         self._timer.stop()
 
     @Slot(list)
-    def set_files(self, files: List[FileModel]) -> None:
+    def set_files(self, files: list[FileModel]) -> None:
         """Set the list of files to track."""
         self._waiting_files = files
 

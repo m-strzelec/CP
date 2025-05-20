@@ -25,7 +25,7 @@ class Client(threading.Thread):
     def run(self) -> None:
         while not self._stop_event.is_set():
             size: float = random.uniform(*self.size_range)
-            file: FileModel = FileModel(size=size)
+            file: FileModel = FileModel(client_id=self.client_id, size=size)
             self.queue_monitor.put_file(file)
             self._stop_event.wait(timeout=self.interval)
 

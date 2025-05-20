@@ -59,6 +59,7 @@ class CatalogModel(threading.Thread):
             if remaining <= 0:
                 break
             time.sleep(min(0.1, remaining))
+        file.catalog_id = self.catalog_id
 
     def stop(self) -> None:
         self._stop_event.set()
