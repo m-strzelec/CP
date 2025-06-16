@@ -24,9 +24,10 @@ class SimulationViewModel(QObject):
         self._client_interval: float = 2.0
         self._min_files_per_client: int = 1
         self._max_files_per_client: int = 5
-        self._min_file_size: float = 1.0
-        self._max_file_size: float = 1000.0
+        self._min_file_size: int = 1
+        self._max_file_size: int = 1000
         self._auto_mode: bool = True
+        self._manual_files: int = 3
 
         self._simulation_manager: Optional[SimulationManager] = None
         self._is_running: bool = False
@@ -73,17 +74,17 @@ class SimulationViewModel(QObject):
         if value >= self._min_files_per_client:
             self._max_files_per_client = value
 
-    def min_file_size(self) -> float:
+    def min_file_size(self) -> int:
         return self._min_file_size
 
-    def set_min_file_size(self, value: float) -> None:
+    def set_min_file_size(self, value: int) -> None:
         if 0 < value <= self._max_file_size:
             self._min_file_size = value
 
-    def max_file_size(self) -> float:
+    def max_file_size(self) -> int:
         return self._max_file_size
 
-    def set_max_file_size(self, value: float) -> None:
+    def set_max_file_size(self, value: int) -> None:
         if value >= self._min_file_size:
             self._max_file_size = value
 
@@ -92,6 +93,12 @@ class SimulationViewModel(QObject):
 
     def set_auto_mode(self, value: bool) -> None:
         self._auto_mode = value
+        
+    def manual_files(self) -> int:
+        return self._manual_files
+    
+    def set_manual_files(self, value: int) -> None:
+        self._manual_files = value
 
     def is_running(self) -> bool:
         return self._is_running
@@ -148,11 +155,10 @@ class SimulationViewModel(QObject):
             self.catalogStatusChanged.emit(catalog_id, "Stopped")
             self.progressUpdated.emit(catalog_id, 0.0)
 
-    @Slot(int)
-    def add_manual_client(self, num_files: int) -> None:
-        """Add a client manually with specified number of files."""
+    @Slot()
+    def add_manual_client(self) -> None:
         if self._is_running and self._simulation_manager:
-            self._simulation_manager.add_manual_client(num_files)
+            self._simulation_manager.add_manual_client(self._manual_files)
 
     def _catalog_callback(
         self,
@@ -203,8 +209,9 @@ class SimulationViewModel(QObject):
             self.waitingClientsUpdated.emit(self._waiting_clients)
 
     def _client_created_callback(self, client: ClientModel) -> None:
-        self._waiting_clients.append(client)
-        self.waitingClientsUpdated.emit(self._waiting_clients)
+        if self._simulation_manager:
+            self._waiting_clients = self._simulation_manager.get_waiting_clients()
+            self.waitingClientsUpdated.emit(self._waiting_clients)
 
     def _file_processed_callback(self, file: FileModel) -> None:
         # Update waiting clients list

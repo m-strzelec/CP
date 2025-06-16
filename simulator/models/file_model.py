@@ -10,13 +10,13 @@ class FileModel:
     _counter: int = 0
     _counter_lock: threading.Lock = threading.Lock()
 
-    def __init__(self, client_id, size: float) -> None:
+    def __init__(self, client_id, size: int) -> None:
         with FileModel._counter_lock:
             FileModel._counter += 1
             self.id: int = FileModel._counter
         self.client_id: int = client_id
         self.catalog_id: Optional[int] = None
-        self.size: float = size
+        self.size: int = size
         self.arrival_time: float = time.monotonic()
         self.start_time: Optional[float] = None
         self.end_time: Optional[float] = None

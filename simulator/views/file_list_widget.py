@@ -1,6 +1,7 @@
-"""Widget for displaying lists of files."""
+"""Widget for displaying lists of clients and their files."""
 
 from typing import Optional
+from datetime import datetime
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QTableWidget,
@@ -9,22 +10,15 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Slot
 
 from simulator.models.file_model import FileModel
-from simulator.views.timer_widget import TimerWidget
+from simulator.models.client_model import ClientModel
 
 
 class FileListWidget(QWidget):
-    """Widget showing waiting and processed files."""
+    """Widget showing waiting clients and processed files."""
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
-
-        self.file_map = {}
-
-        # Create timer updater for live wait time updates
-        self.timer_updater = TimerWidget(self)
-        self.timer_updater.update_waiting_times.connect(self.refresh_waiting_times)
-        self.timer_updater.start()
-
+        self.client_map = {}
         self._setup_ui()
 
     def _setup_ui(self):
@@ -33,15 +27,15 @@ class FileListWidget(QWidget):
         # Create tab widget
         self.tab_widget = QTabWidget()
 
-        # Create waiting files table
+        # Create waiting clients table
         self.waiting_table = QTableWidget()
         self.waiting_table.setColumnCount(3)
         self.waiting_table.setHorizontalHeaderLabels(
-            ["Client ID", "Size", "Waiting Time"]
+            ["Client ID", "File Sizes", "Arrival Time"]
         )
-        self.waiting_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch
-        )
+        self.waiting_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self.waiting_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.waiting_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         # Enable sorting by clicking on headers
         self.waiting_table.setSortingEnabled(True)
         self.waiting_table.verticalHeader().setVisible(False)
@@ -60,7 +54,7 @@ class FileListWidget(QWidget):
         self.processed_table.setSortingEnabled(True)
         self.processed_table.verticalHeader().setVisible(False)
 
-        self.tab_widget.addTab(self.waiting_table, "Waiting Files")
+        self.tab_widget.addTab(self.waiting_table, "Waiting Clients")
         self.tab_widget.addTab(self.processed_table, "Processed Files")
 
         self.waiting_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
@@ -71,11 +65,10 @@ class FileListWidget(QWidget):
         layout.addWidget(self.tab_widget)
 
     @Slot(list)
-    def update_waiting_files(self, files: list[FileModel]):
-        self.timer_updater.set_files(files)
-        self._update_waiting_table(files)
+    def update_waiting_clients(self, clients: list[ClientModel]):
+        self._update_waiting_table(clients)
 
-    def _update_waiting_table(self, files: list[FileModel]):
+    def _update_waiting_table(self, clients: list[ClientModel]):
         # Store current sort column and order
         sort_column = self.waiting_table.horizontalHeader().sortIndicatorSection()
         sort_order = self.waiting_table.horizontalHeader().sortIndicatorOrder()
@@ -83,54 +76,87 @@ class FileListWidget(QWidget):
         # Temporarily disable sorting to prevent slowdowns during update
         self.waiting_table.setSortingEnabled(False)
 
-        self.file_map = {file.id: file for file in files}
-        self.waiting_table.setRowCount(len(files))
+        self.client_map = {client.id: client for client in clients}
+        self.waiting_table.setRowCount(len(clients))
 
-        for row, file in enumerate(files):
+        for row, client in enumerate(clients):
             # Client ID
-            client_id_item = QTableWidgetItem(f"#{file.client_id}")
+            client_id_item = QTableWidgetItem(f"#{client.id}")
             client_id_item.setFlags(client_id_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            client_id_item.setData(Qt.ItemDataRole.UserRole, file.client_id)
+            client_id_item.setData(Qt.ItemDataRole.UserRole, client.id)
             self.waiting_table.setItem(row, 0, client_id_item)
 
-            # Size
-            size_item = QTableWidgetItem(f"{file.size:.2f}")
-            size_item.setFlags(size_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self.waiting_table.setItem(row, 1, size_item)
+            # File sizes (comma-separated)
+            sizes_item = QTableWidgetItem(client.file_sizes_str)
+            sizes_item.setFlags(sizes_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.waiting_table.setItem(row, 1, sizes_item)
 
-            # Waiting time
-            wait_item = QTableWidgetItem(f"{file.waiting_time:.2f}s")
-            wait_item.setFlags(wait_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self.waiting_table.setItem(row, 2, wait_item)
+            # Arrival time (formatted)
+            arrival_time = datetime.fromtimestamp(client.arrival_time).strftime("%H:%M:%S")
+            arrival_item = QTableWidgetItem(arrival_time)
+            arrival_item.setFlags(arrival_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.waiting_table.setItem(row, 2, arrival_item)
 
         # Re-enable sorting
         self.waiting_table.setSortingEnabled(True)
 
         # Update tab title to show count
-        self.tab_widget.setTabText(0, f"Waiting Files ({len(files)})")
+        self.tab_widget.setTabText(0, f"Waiting Clients ({len(clients)})")
 
         if sort_column >= 0:
             self.waiting_table.sortItems(sort_column, sort_order)
 
     @Slot(list)
-    def refresh_waiting_times(self, files: list[FileModel]):
-        # Disable sorting temporarily for better performance
-        self.waiting_table.setSortingEnabled(False)
-        id_to_file = {f.id: f for f in files}
+    def update_processed_files(self, files: list[FileModel]):
+        """Update the processed files table."""
+        # Store current sort column and order
+        sort_column = self.processed_table.horizontalHeader().sortIndicatorSection()
+        sort_order = self.processed_table.horizontalHeader().sortIndicatorOrder()
 
-        for row in range(self.waiting_table.rowCount()):
-            id_item = self.waiting_table.item(row, 0)
-            if not id_item:
-                continue
+        # Temporarily disable sorting to prevent slowdowns during update
+        self.processed_table.setSortingEnabled(False)
 
-            file_id = id_item.data(Qt.ItemDataRole.UserRole)
-            file = id_to_file.get(file_id)
+        self.processed_table.setRowCount(len(files))
 
-            if file:
-                wait_item = self.waiting_table.item(row, 2)
-                if wait_item:
-                    wait_item.setText(f"{file.waiting_time:.2f}s")
+        for row, file in enumerate(files):
+            # Client ID
+            client_id_item = QTableWidgetItem(f"#{file.client_id}")
+            client_id_item.setFlags(client_id_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.processed_table.setItem(row, 0, client_id_item)
+
+            # Catalog ID
+            catalog_id_item = QTableWidgetItem(f"#{file.catalog_id}" if file.catalog_id is not None else "N/A")
+            catalog_id_item.setFlags(catalog_id_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.processed_table.setItem(row, 1, catalog_id_item)
+
+            # Size
+            size_item = QTableWidgetItem(f"{file.size}")
+            size_item.setFlags(size_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.processed_table.setItem(row, 2, size_item)
+
+            # Wait time
+            wait_time = file.waiting_time if file.start_time else 0.0
+            wait_item = QTableWidgetItem(f"{wait_time:.2f}s")
+            wait_item.setFlags(wait_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.processed_table.setItem(row, 3, wait_item)
+
+            # Processing time
+            proc_time = file.processing_time
+            proc_item = QTableWidgetItem(f"{proc_time:.2f}s")
+            proc_item.setFlags(proc_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.processed_table.setItem(row, 4, proc_item)
+
+            # Total time
+            total_time = wait_time + proc_time
+            total_item = QTableWidgetItem(f"{total_time:.2f}s")
+            total_item.setFlags(total_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.processed_table.setItem(row, 5, total_item)
 
         # Re-enable sorting
-        self.waiting_table.setSortingEnabled(True)
+        self.processed_table.setSortingEnabled(True)
 
+        # Update tab title to show count
+        self.tab_widget.setTabText(1, f"Processed Files ({len(files)})")
+
+        if sort_column >= 0:
+            self.processed_table.sortItems(sort_column, sort_order)

@@ -3,12 +3,12 @@
 import math
 
 
-def compute_cost(size: float, wait_time: float, m: float, k: float) -> float:
+def compute_cost(size: int, wait_time: float, m: float, k: float) -> float:
     """Calculate cost function. Lower cost => higher scheduling priority.
 
     Parameters
     ----------
-    size : float
+    size : int
         Size of the file.
     wait_time : float
         Time in seconds that file waited since its arrival.

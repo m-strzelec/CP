@@ -17,7 +17,7 @@ class ClientModel:
             self.id: int = ClientModel._counter
         # Sort files by size
         self.files: list[FileModel] = sorted(files, key=lambda f: f.size)
-        self.arrival_time: float = time.monotonic()
+        self.arrival_time: float = time.time()
         # Update client_id for all files
         for file in self.files:
             file.client_id = self.id
@@ -33,7 +33,7 @@ class ClientModel:
     @property
     def file_sizes_str(self) -> str:
         """Get comma-separated string of file sizes."""
-        return ", ".join(f"{file.size:.1f}" for file in self.files)
+        return ", ".join(f"{file.size}" for file in self.files)
 
     @property
     def has_pending_files(self) -> bool:

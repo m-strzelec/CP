@@ -17,7 +17,7 @@ class SimulationManager:
         num_catalogs: int,
         client_interval: float,
         files_per_client_range: tuple[int, int],
-        size_range: tuple[float, float],
+        size_range: tuple[int, int],
         m: float,
         k: float,
         dispatch_callback: Optional[DispatchCallbackType] = None,
@@ -81,7 +81,7 @@ class SimulationManager:
         files: list[FileModel] = []
 
         for _ in range(num_files):
-            size = random.uniform(*self.size_range)
+            size = random.randint(*self.size_range)
             file = FileModel(client_id=0, size=size)
             files.append(file)
 
