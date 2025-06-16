@@ -29,7 +29,6 @@ class SimulationView(QMainWindow):
         self.view_model.simulationStateChanged.connect(self.update_ui_state)
 
         self.view_model.waitingFilesUpdated.connect(self.update_waiting_files)
-        self.view_model.processedFilesUpdated.connect(self.update_processed_files)
 
         self._setup_ui()
 
@@ -120,7 +119,7 @@ class SimulationView(QMainWindow):
 
         self.catalogs_group = QGroupBox("Catalog Status")
         self.catalogs_layout = QVBoxLayout(self.catalogs_group)
-        self.catalogs_layout.setSpacing(10)
+        self.catalogs_layout.setSpacing(5)
 
         self.catalog_widgets: dict[int, dict[str, QWidget]] = {}
         self._recreate_catalog_widgets()
@@ -160,7 +159,7 @@ class SimulationView(QMainWindow):
 
         # Create widgets for each catalog
         for i in range(self.view_model.num_catalogs()):
-            catalog_box = QGroupBox(f"Catalog #{i}")
+            catalog_box = QGroupBox(f"Catalog #{i+1}")
             catalog_layout = QVBoxLayout(catalog_box)
 
             status_label = QLabel("Idle")
@@ -172,20 +171,13 @@ class SimulationView(QMainWindow):
             progress_bar.setTextVisible(True)
             progress_bar.setFormat("%p%")
 
-            files_label = QLabel("Files: 0")
-            files_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            files_label.setWordWrap(True)
-
             catalog_layout.addWidget(status_label)
             catalog_layout.addWidget(progress_bar)
-            catalog_layout.addWidget(files_label)
             self.catalogs_layout.insertWidget(i, catalog_box)
             self.catalog_widgets[i] = {
                 "group": catalog_box,
                 "status": status_label,
                 "progress": progress_bar,
-                "files_label": files_label,
-                "file_count": 0
             }
 
         if self.file_list_widget:
@@ -216,33 +208,6 @@ class SimulationView(QMainWindow):
         if self.file_list_widget:
             self.file_list_widget.update_waiting_files(files)
 
-    @Slot(list)
-    def update_processed_files(self, files: list) -> None:
-        """Update the processed files view."""
-        if self.file_list_widget:
-            self.file_list_widget.update_processed_files(files)
-
-        catalog_counts = {}
-        for file in files:
-            if hasattr(file, 'catalog_id') and file.catalog_id is not None:
-                catalog_id = file.catalog_id
-                if catalog_id not in catalog_counts:
-                    catalog_counts[catalog_id] = 0
-                catalog_counts[catalog_id] += 1
-
-        for catalog_id, count in catalog_counts.items():
-            if catalog_id in self.catalog_widgets:
-                catalog_data = self.catalog_widgets[catalog_id]
-                catalog_data["file_count"] = count
-                catalog_data["files_label"].setText(f"Files: {count}")
-
-    def reset_catalog_file_counts(self) -> None:
-        """Reset all catalog file counts to zero."""
-        for catalog_id in self.catalog_widgets:
-            catalog_data = self.catalog_widgets[catalog_id]
-            catalog_data["file_count"] = 0
-            catalog_data["files_label"].setText("Files: 0")
-
     @Slot(bool)
     def update_ui_state(self, is_running: bool) -> None:
         """Update UI controls based on simulation state."""
@@ -253,8 +218,6 @@ class SimulationView(QMainWindow):
         self.client_interval_spin.setEnabled(not is_running)
         self.min_size_spin.setEnabled(not is_running)
         self.max_size_spin.setEnabled(not is_running)
-        if is_running:
-            self.reset_catalog_file_counts()
 
     @Slot(int)
     def _on_num_clients_changed(self, value: int) -> None:

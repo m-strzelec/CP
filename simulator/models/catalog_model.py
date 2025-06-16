@@ -36,12 +36,11 @@ class CatalogModel(threading.Thread):
             file: Optional[FileModel] = self.queue_monitor.get_next_file(0.5)
             if file and not self._stop_event.is_set():
                 self.current_file = file
-                file.mark_start()
                 if self.dispatch_callback:
                     self.dispatch_callback(self.catalog_id, file)
 
                 self.process_file(file)
-                file.mark_end()
+                self.queue_monitor.mark_file_completed(file)
 
                 if self.file_processed_callback:
                     self.file_processed_callback(file)

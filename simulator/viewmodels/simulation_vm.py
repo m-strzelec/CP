@@ -5,6 +5,7 @@ from typing import Optional
 from PySide6.QtCore import QObject, Signal, Slot, QTimer
 
 from simulator.models.file_model import FileModel
+from simulator.models.client_model import ClientModel
 from simulator.models.simulation_manager import SimulationManager
 
 
@@ -12,25 +13,27 @@ class SimulationViewModel(QObject):
     catalogStatusChanged = Signal(int, str)
     progressUpdated = Signal(int, float)
     simulationStateChanged = Signal(bool)
-    waitingFilesUpdated = Signal(list)
+    waitingClientsUpdated = Signal(list)
     processedFilesUpdated = Signal(list)
 
     def __init__(self):
         super().__init__()
 
         # Settings
-        self._num_clients: int = 3
         self._num_catalogs: int = 5
-        self._client_interval: float = 1.0
+        self._client_interval: float = 2.0
+        self._min_files_per_client: int = 1
+        self._max_files_per_client: int = 5
         self._min_file_size: float = 1.0
-        self._max_file_size: float = 300.0
+        self._max_file_size: float = 1000.0
+        self._auto_mode: bool = True
 
         self._simulation_manager: Optional[SimulationManager] = None
         self._is_running: bool = False
         self._catalog_statuses: dict[int, str] = {}
         self._catalog_progresses: dict[int, float] = {}
 
-        self._waiting_files: list[FileModel] = []
+        self._waiting_clients: list[ClientModel] = []
         self._processed_files: list[FileModel] = []
 
         self._catalog_files: dict[int, int] = {}
@@ -39,13 +42,6 @@ class SimulationViewModel(QObject):
         self._progress_timer = QTimer(self)
         self._progress_timer.timeout.connect(self._update_progress)
         self._progress_timer.setInterval(100)
-
-    def num_clients(self) -> int:
-        return self._num_clients
-
-    def set_num_clients(self, value: int) -> None:
-        if value > 0:
-            self._num_clients = value
 
     def num_catalogs(self) -> int:
         return self._num_catalogs
@@ -63,6 +59,20 @@ class SimulationViewModel(QObject):
         if value > 0:
             self._client_interval = value
 
+    def min_files_per_client(self) -> int:
+        return self._min_files_per_client
+
+    def set_min_files_per_client(self, value: int) -> None:
+        if 1 <= value <= self._max_files_per_client:
+            self._min_files_per_client = value
+
+    def max_files_per_client(self) -> int:
+        return self._max_files_per_client
+
+    def set_max_files_per_client(self, value: int) -> None:
+        if value >= self._min_files_per_client:
+            self._max_files_per_client = value
+
     def min_file_size(self) -> float:
         return self._min_file_size
 
@@ -77,11 +87,17 @@ class SimulationViewModel(QObject):
         if value >= self._min_file_size:
             self._max_file_size = value
 
+    def auto_mode(self) -> bool:
+        return self._auto_mode
+
+    def set_auto_mode(self, value: bool) -> None:
+        self._auto_mode = value
+
     def is_running(self) -> bool:
         return self._is_running
 
-    def waiting_files(self) -> list[FileModel]:
-        return self._waiting_files
+    def waiting_clients(self) -> list[ClientModel]:
+        return self._waiting_clients
 
     def processed_files(self) -> list[FileModel]:
         return self._processed_files
@@ -93,23 +109,24 @@ class SimulationViewModel(QObject):
         self._catalog_statuses = {i: "Idle" for i in range(self._num_catalogs)}
         self._catalog_progresses = {i: 0.0 for i in range(self._num_catalogs)}
         self._catalog_files = {}
-        self._waiting_files = []
+        self._waiting_clients = []
         self._processed_files = []
         self._active_files = {}
 
-        self.waitingFilesUpdated.emit([])
+        self.waitingClientsUpdated.emit([])
         self.processedFilesUpdated.emit([])
 
         self._simulation_manager = SimulationManager(
-            num_clients=self._num_clients,
             num_catalogs=self._num_catalogs,
             client_interval=self._client_interval,
+            files_per_client_range=(self._min_files_per_client, self._max_files_per_client),
             size_range=(self._min_file_size, self._max_file_size),
-            m=self._num_clients,
+            m=self._num_catalogs,
             k=self._num_catalogs,
             dispatch_callback=self._catalog_callback,
-            file_creation_callback=self._file_created_callback,
-            file_processed_callback=self._file_processed_callback
+            client_creation_callback=self._client_created_callback,
+            file_processed_callback=self._file_processed_callback,
+            auto_mode=self._auto_mode
         )
         self._simulation_manager.start()
         self._is_running = True
@@ -130,6 +147,12 @@ class SimulationViewModel(QObject):
             self._catalog_progresses[catalog_id] = 0.0
             self.catalogStatusChanged.emit(catalog_id, "Stopped")
             self.progressUpdated.emit(catalog_id, 0.0)
+
+    @Slot(int)
+    def add_manual_client(self, num_files: int) -> None:
+        """Add a client manually with specified number of files."""
+        if self._is_running and self._simulation_manager:
+            self._simulation_manager.add_manual_client(num_files)
 
     def _catalog_callback(
         self,
@@ -174,18 +197,23 @@ class SimulationViewModel(QObject):
             self._catalog_progresses[catalog_id] = progress
             self.progressUpdated.emit(catalog_id, progress)
 
-    def _file_created_callback(self, file: FileModel) -> None:
-        self._waiting_files.append(file)
-        self.waitingFilesUpdated.emit(self._waiting_files)
+        # Update waiting clients list
+        if self._simulation_manager:
+            self._waiting_clients = self._simulation_manager.get_waiting_clients()
+            self.waitingClientsUpdated.emit(self._waiting_clients)
+
+    def _client_created_callback(self, client: ClientModel) -> None:
+        self._waiting_clients.append(client)
+        self.waitingClientsUpdated.emit(self._waiting_clients)
 
     def _file_processed_callback(self, file: FileModel) -> None:
-        self._waiting_files = [
-            f for f in self._waiting_files if f.id != file.id
-        ]
+        # Update waiting clients list
+        if self._simulation_manager:
+            self._waiting_clients = self._simulation_manager.get_waiting_clients()
 
         if file.id in self._catalog_files:
             file.catalog_id = self._catalog_files[file.id]
 
         self._processed_files.append(file)
-        self.waitingFilesUpdated.emit(self._waiting_files)
+        self.waitingClientsUpdated.emit(self._waiting_clients)
         self.processedFilesUpdated.emit(self._processed_files)
