@@ -75,16 +75,9 @@ class SimulationManager:
             if thread.is_alive():
                 thread.join(timeout=1.0)
 
-    def add_manual_client(self, num_files: int) -> ClientModel:
-        """Manually add a client with specified number of files."""
-        import random
-        files: list[FileModel] = []
-
-        for _ in range(num_files):
-            size = random.randint(*self.size_range)
-            file = FileModel(client_id=0, size=size)
-            files.append(file)
-
+    def add_manual_client(self, sizes: list[int]) -> ClientModel:
+        """Manually add a client with specified file sizes."""
+        files = [FileModel(client_id=0, size=size) for size in sizes]
         client = ClientModel(files)
         self.queue_monitor.put_client(client)
         return client

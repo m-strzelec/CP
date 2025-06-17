@@ -27,7 +27,7 @@ class SimulationViewModel(QObject):
         self._min_file_size: int = 1
         self._max_file_size: int = 1000
         self._auto_mode: bool = True
-        self._manual_files: int = 3
+        self._manual_files: str = ""
 
         self._simulation_manager: Optional[SimulationManager] = None
         self._is_running: bool = False
@@ -94,10 +94,10 @@ class SimulationViewModel(QObject):
     def set_auto_mode(self, value: bool) -> None:
         self._auto_mode = value
         
-    def manual_files(self) -> int:
+    def manual_files(self) -> str:
         return self._manual_files
     
-    def set_manual_files(self, value: int) -> None:
+    def set_manual_files(self, value: str) -> None:
         self._manual_files = value
 
     def is_running(self) -> bool:
@@ -158,7 +158,13 @@ class SimulationViewModel(QObject):
     @Slot()
     def add_manual_client(self) -> None:
         if self._is_running and self._simulation_manager:
-            self._simulation_manager.add_manual_client(self._manual_files)
+            try:
+                sizes = [int(s.strip()) for s in self._manual_files.split(',') if s.strip().isdigit()]
+                if not sizes:
+                    return
+                self._simulation_manager.add_manual_client(sizes)
+            except ValueError:
+                pass
 
     def _catalog_callback(
         self,

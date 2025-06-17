@@ -3,7 +3,7 @@
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox,
     QDoubleSpinBox, QPushButton, QGroupBox, QProgressBar, QFormLayout,
-    QSplitter, QScrollArea, QCheckBox
+    QSplitter, QScrollArea, QCheckBox, QLineEdit
 )
 from PySide6.QtCore import Qt, Slot
 
@@ -118,27 +118,25 @@ class SimulationView(QMainWindow):
 
         # Manual client addition
         manual_layout = QHBoxLayout()
-        self.manual_files_spin = QSpinBox()
-        self.manual_files_spin.setRange(1, 50)
-        self.manual_files_spin.setSingleStep(1)
-        self.manual_files_spin.setValue(self.view_model.manual_files())
-        self.manual_files_spin.valueChanged.connect(self._on_manual_files_changed)
-        self.manual_files_spin.setEnabled(False)
+        self.manual_sizes_edit = QLineEdit()
+        self.manual_sizes_edit.setPlaceholderText("10,20,30")
+        self.manual_sizes_edit.setText(self.view_model.manual_files())
+        self.manual_sizes_edit.textChanged.connect(self._on_manual_files_changed)
         
         self.add_client_button = QPushButton("Add Client")
         self.add_client_button.clicked.connect(self.view_model.add_manual_client)
         self.add_client_button.setEnabled(False)
 
         manual_layout.addWidget(QLabel("Files:"))
-        manual_layout.addWidget(self.manual_files_spin)
+        manual_layout.addWidget(self.manual_sizes_edit)
         manual_layout.addWidget(self.add_client_button)
 
         control_layout.addWidget(self.start_button)
         control_layout.addWidget(self.stop_button)
         control_layout.addLayout(manual_layout)
 
-        settings_and_control_layout.addWidget(settings_group)
-        settings_and_control_layout.addWidget(control_group)
+        settings_and_control_layout.addWidget(settings_group, 2)
+        settings_and_control_layout.addWidget(control_group, 4) 
 
         control_panel_layout.addWidget(settings_and_control)
 
@@ -258,9 +256,7 @@ class SimulationView(QMainWindow):
         self.min_size_spin.setEnabled(not is_running)
         self.max_size_spin.setEnabled(not is_running)
         self.auto_mode_checkbox.setEnabled(not is_running)
-        self.manual_files_spin.setEnabled(
-            is_running and not self.auto_mode_checkbox.isChecked()
-        )
+        self.add_client_button.setEnabled(is_running)
 
     @Slot(int)
     def _on_num_catalogs_changed(self, value: int) -> None:
@@ -294,10 +290,7 @@ class SimulationView(QMainWindow):
     @Slot(bool)
     def _on_auto_mode_changed(self, checked: bool) -> None:
         self.view_model.set_auto_mode(checked)
-        self.add_client_button.setEnabled(
-            self.view_model.is_running() and not checked
-        )
         
     @Slot(int)
-    def _on_manual_files_changed(self, value: int) -> None:
+    def _on_manual_files_changed(self, value: str) -> None:
         self.view_model.set_manual_files(value)
